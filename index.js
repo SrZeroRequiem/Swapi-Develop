@@ -1,12 +1,13 @@
 const express = require('express');
-const mysql = require('mysql')
+const mysql = require('mysql2');
 const cors = require('cors')
 const app = express();
+require('dotenv').config()
 
 const db = mysql.createConnection({
-    host: "localhost",
-    user: "root",
-    password: "",
+    host: process.env.HOST,
+    user: process.env.USER,
+    password: process.env.PASS,
     database: "swapi"
 })
 app.use(cors({
@@ -30,11 +31,6 @@ app.get("/films",(req,res)=>{
             console.error(err)
         }else{
             let formated = result.map((obj)=>{
-                obj["starships"] = JSON.parse(obj["starships"])
-                obj["planets"] = JSON.parse(obj["planets"])
-                obj["vehicles"] = JSON.parse(obj["vehicles"])
-                obj["species"] = JSON.parse(obj["species"])
-                obj["characters"] = JSON.parse(obj["characters"])
                 return obj
 
             })
@@ -67,7 +63,7 @@ app.get("/starships",(req,res)=>{
                     let merged = result.map((obj)=>{
                         const handlerShip = starships.filter((ship)=>{return ship.pk === Number(obj.pk)})
                         if(handlerShip[0]!== undefined){
-                            let jsonPilots = JSON.parse(handlerShip[0].pilots)
+                            let jsonPilots = handlerShip[0].pilots
                             obj["pilots"] = jsonPilots.map((pilot)=>Number(pilot))
                             obj["MGLT"] = handlerShip[0].MGLT
                             obj["starship_class"] = handlerShip[0].starship_class
