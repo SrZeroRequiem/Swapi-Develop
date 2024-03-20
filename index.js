@@ -1,88 +1,107 @@
 const express = require('express');
-const mysql = require('mysql2');
-const cors = require('cors')
+const fs = require('fs');
+const mysql2 = require('mysql2');
+const cors = require('cors');
+const http = require('http');
+const https = require('https');
 const app = express();
-require('dotenv').config()
+const privateKey = fs.readFileSync('private.key', 'utf8');
+const certificate = fs.readFileSync('certificate.crt');
 
-const db = mysql.createConnection({
-    host: process.env.HOST,
-    user: process.env.USER,
-    password: process.env.PASS,
+const credentials = { key: privateKey, cert: certificate };
+require('dotenv').config();
+
+const db = mysql2.createConnection({
+    host: "swapi.ch6626048hob.eu-north-1.rds.amazonaws.com",
+    user: "root",
+    password: "admin123",
     database: "swapi"
-})
-app.use(cors())
-app.use(express.json())
+});
 
-app.get("/planets",(req,res)=>{
-    db.query('SELECT * FROM planets WHERE NAME != ?',('unknown'), (err, result)=>{
-        if(err){
-            console.error(err)
-        }else{
-            res.send(result)
+db.connect((err) => {
+    if (err) {
+        console.error('Error connecting to database:', err);
+        process.exit(1);
+    }
+    console.log('Connected to database');
+});
+
+app.use(cors());
+app.use(express.json());
+
+app.get("/api/planets", (req, res) => {
+    db.query('SELECT * FROM planets WHERE NAME != ?', ('unknown'), (err, result) => {
+        if (err) {
+            console.error('Error querying planets:', err);
+            res.status(500).json({ error: 'Internal Server Error' });
+        } else {
+            res.status(200).json(result);
         }
-    })
+    });
+});
 
-})
-app.get("/films",(req,res)=>{
-    db.query('SELECT * FROM films', (err, result)=>{
-        if(err){
-            console.error(err)
-        }else{
-            let formated = result.map((obj)=>{
-                return obj
-
-            })
-            res.send(formated)
+app.get("/api/films", (req, res) => {
+    db.query('SELECT * FROM films', (err, result) => {
+        if (err) {
+            console.error('Error querying films:', err);
+            res.status(500).json({ error: 'Internal Server Error' });
+        } else {
+            res.status(200).json(result);
         }
-    })
+    });
+});
 
-})
-app.get("/people",(req,res)=>{
-    db.query('SELECT * FROM people', (err, result)=>{
-        if(err){
-            console.error(err)
-        }else{
-            res.send(result)
+app.get("/api/people", (req, res) => {
+    db.query('SELECT * FROM people', (err, result) => {
+        if (err) {
+            console.error('Error querying people:', err);
+            res.status(500).json({ error: 'Internal Server Error' });
+        } else {
+            res.status(200).json(result);
         }
-    })
+    });
+});
 
-})
+app.get("/api/starships", (req, res) => {
+    db.query('SELECT * FROM starships', (err, starshipsResult) => {
+        if (err) {
+            console.error('Error querying starships:', err);
+            res.status(500).json({ error: 'Internal Server Error' });
+            return;
+        }
 
-app.get("/starships",(req,res)=>{
-    db.query('SELECT * FROM starships', (err, result)=>{
-        if(err){
-            console.error(err)
-        }else{
-            let starships = result
-            db.query('SELECT * FROM transport', (err, result)=>{
-                if(err){
-                    console.error(err)
-                }else{
-                    let merged = result.map((obj)=>{
-                        const handlerShip = starships.filter((ship)=>{return ship.pk === Number(obj.pk)})
-                        if(handlerShip[0]!== undefined){
-                            let jsonPilots = handlerShip[0].pilots
-                            obj["pilots"] = jsonPilots.map((pilot)=>Number(pilot))
-                            obj["MGLT"] = handlerShip[0].MGLT
-                            obj["starship_class"] = handlerShip[0].starship_class
-                            obj["hyperdrive_rating"] = handlerShip[0].hyperdrive_rating
-                            return obj
-                        } else{
-                            return undefined
-                        }
-                    })
-                    merged = merged.filter((m)=> m!==undefined)
-                    res.send(merged)
+        db.query('SELECT * FROM transport', (err, transportResult) => {
+            if (err) {
+                console.error('Error querying transport:', err);
+                res.status(500).json({ error: 'Internal Server Error' });
+                return;
+            }
+
+            let merged = [];
+            for (const transport of transportResult) {
+                const handlerShip = starshipsResult.find((ship) => ship.pk === Number(transport.pk));
+                if (handlerShip) {
+                    let jsonPilots = handlerShip.pilots;
+                    transport.pilots = jsonPilots.map((pilot) => Number(pilot));
+                    transport.MGLT = handlerShip.MGLT;
+                    transport.starship_class = handlerShip.starship_class;
+                    transport.hyperdrive_rating = handlerShip.hyperdrive_rating;
+                    merged.push(transport);
                 }
-            })
-        }
-    })
+            }
+            res.status(200).json(merged);
+        });
+    });
+});
 
-})
+const httpServer = http.createServer(app);
+httpServer.listen(80, () => {
+    console.log("Running HTTP on port 80");
+});
 
+const httpsServer = https.createServer(credentials, app);
+httpsServer.listen(443, () => {
+    console.log("Running HTTPS on port 443");
+});
 
-app.listen(3001,()=>{
-    console.log("3001")
-})
-
-module.exports = app;
+module.exports = app()
